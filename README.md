@@ -71,3 +71,48 @@ pytest
 ```
 
 타임존 변환 및 텍스트 포맷팅 로직에 대한 단위 테스트만 포함되어 있으며, 외부 API(API-Football, OpenAI) 호출은 실제 키가 필요해 테스트 대상에서 제외했습니다.
+
+## 서버 배포 (PM2)
+
+봇을 서버에서 24시간 띄워두려면 [PM2](https://pm2.keymetrics.io/)로 프로세스를 관리하는 것을 추천합니다.
+
+```bash
+# 1. 코드 받기
+git clone https://github.com/noob2220202/aven.git
+cd aven
+git checkout claude/telegram-worldcup-bot-llj3cs   # main에 머지되기 전이라면
+
+# 2. Node.js / PM2 설치 (최초 1회, Ubuntu/Debian 기준)
+sudo apt update && sudo apt install -y nodejs npm
+npm install -g pm2
+
+# 3. Python 가상환경 + 의존성 설치
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+deactivate
+
+# 4. 환경변수 설정
+cp .env.example .env
+nano .env   # TELEGRAM_BOT_TOKEN, API_FOOTBALL_KEY, OPENAI_API_KEY 입력
+
+# 5. PM2로 봇 실행 (가상환경 파이썬을 직접 지정)
+pm2 start .venv/bin/python --name worldcup-bot --time -- -m bot.main
+
+# 6. 상태 확인 / 로그 보기
+pm2 status
+pm2 logs worldcup-bot
+
+# 7. 서버 재부팅 후에도 자동 시작되도록 등록
+pm2 save
+pm2 startup    # 출력되는 명령어를 그대로 한 번 더 실행 (sudo 필요할 수 있음)
+```
+
+이후 자주 쓰는 관리 명령어:
+
+```bash
+pm2 restart worldcup-bot   # 코드/환경변수 수정 후 재시작
+pm2 stop worldcup-bot      # 중지
+pm2 delete worldcup-bot    # 프로세스 제거
+pm2 logs worldcup-bot --lines 100   # 최근 로그 100줄
+```
