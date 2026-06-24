@@ -27,14 +27,14 @@
 ## 설치 및 실행
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
+# Debian/Ubuntu 최신 버전에서 "externally-managed-environment" 에러가 나면:
+# pip install -r requirements.txt --break-system-packages
 
 cp .env.example .env
 # .env 파일에 토큰/키 입력
 
-python -m bot.main
+python3 -m bot.main
 ```
 
 ## 환경 변수
@@ -86,18 +86,17 @@ git checkout claude/telegram-worldcup-bot-llj3cs   # main에 머지되기 전이
 sudo apt update && sudo apt install -y nodejs npm
 npm install -g pm2
 
-# 3. Python 가상환경 + 의존성 설치
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-deactivate
+# 3. 의존성 설치 (가상환경 없이 시스템 파이썬 사용)
+pip3 install -r requirements.txt
+# "externally-managed-environment" 에러가 나면:
+# pip3 install -r requirements.txt --break-system-packages
 
 # 4. 환경변수 설정
 cp .env.example .env
 nano .env   # TELEGRAM_BOT_TOKEN, API_FOOTBALL_KEY, OPENAI_API_KEY 입력
 
-# 5. PM2로 봇 실행 (가상환경 파이썬을 직접 지정)
-pm2 start .venv/bin/python --name worldcup-bot --time -- -m bot.main
+# 5. PM2로 봇 실행 (시스템 python3을 직접 지정)
+pm2 start python3 --name worldcup-bot --time -- -m bot.main
 
 # 6. 상태 확인 / 로그 보기
 pm2 status
