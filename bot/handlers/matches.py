@@ -1,27 +1,30 @@
+import html
 from datetime import date, datetime, timedelta
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from .. import api_football, config
-from ..formatting import format_kickoff_time, format_status
+from ..flags import flag_emoji
+from ..formatting import format_match_line
 
 
 def build_matches_view(target_date: date, fixtures: list[dict]) -> tuple[str, InlineKeyboardMarkup]:
-    lines = [f"📅 *{target_date.strftime('%Y-%m-%d')} 경기 일정 (한국시간)*", ""]
+    weekday = ["월", "화", "수", "목", "금", "토", "일"][target_date.weekday()]
+    lines = ["🏆 <b>2026 FIFA 월드컵</b>", f"🗓 <b>{target_date.isoformat()}</b> ({weekday}) · 한국시간 기준", ""]
     buttons = []
 
     if not fixtures:
-        lines.append("해당 날짜에 예정된 월드컵 경기가 없습니다.")
+        lines.append("😴 <i>이 날은 경기가 없는 휴식일이에요.</i>")
     else:
         for fixture in fixtures:
+            lines.append(format_match_line(fixture))
+            lines.append("")
             home = fixture["teams"]["home"]["name"]
             away = fixture["teams"]["away"]["name"]
-            kickoff = format_kickoff_time(fixture["fixture"]["date"])
-            status = format_status(fixture["fixture"]["status"], fixture["goals"])
-            lines.append(f"{kickoff} | {home} vs {away} ({status})")
+            button_label = f"{flag_emoji(home)} {home} vs {away} {flag_emoji(away)}"
             buttons.append(
-                [InlineKeyboardButton(f"{home} vs {away}", callback_data=f"match:{fixture['fixture']['id']}")]
+                [InlineKeyboardButton(button_label, callback_data=f"match:{fixture['fixture']['id']}")]
             )
 
     nav_row = [
@@ -30,7 +33,7 @@ def build_matches_view(target_date: date, fixtures: list[dict]) -> tuple[str, In
     ]
     buttons.append(nav_row)
 
-    return "\n".join(lines), InlineKeyboardMarkup(buttons)
+    return "\n".join(lines).rstrip(), InlineKeyboardMarkup(buttons)
 
 
 def _parse_target_date(args: list[str]) -> date:
@@ -43,19 +46,19 @@ async def matches_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     try:
         target_date = _parse_target_date(context.args)
     except ValueError:
-        await update.message.reply_text("날짜 형식이 올바르지 않습니다. 예: /matches 2026-06-25")
+        await update.message.reply_text("🤔 날짜 형식이 이상해요. <code>/matches 2026-06-25</code> 처럼 써주세요.", parse_mode="HTML")
         return
 
-    status_message = await update.message.reply_text("경기 일정을 조회 중입니다...")
+    status_message = await update.message.reply_text("🔍 경기 일정 찾아보는 중...")
 
     try:
         fixtures = await api_football.get_fixtures_by_kst_date(target_date)
     except api_football.ApiFootballError as exc:
-        await status_message.edit_text(f"경기 정보를 가져오지 못했습니다: {exc}")
+        await status_message.edit_text(f"⚠️ 경기 정보를 못 가져왔어요: {html.escape(str(exc))}", parse_mode="HTML")
         return
 
     text, keyboard = build_matches_view(target_date, fixtures)
-    await status_message.edit_text(text, parse_mode="Markdown", reply_markup=keyboard)
+    await status_message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
 
 
 async def date_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -67,8 +70,8 @@ async def date_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     try:
         fixtures = await api_football.get_fixtures_by_kst_date(target_date)
     except api_football.ApiFootballError as exc:
-        await query.edit_message_text(f"경기 정보를 가져오지 못했습니다: {exc}")
+        await query.edit_message_text(f"⚠️ 경기 정보를 못 가져왔어요: {html.escape(str(exc))}", parse_mode="HTML")
         return
 
     text, keyboard = build_matches_view(target_date, fixtures)
-    await query.edit_message_text(text, parse_mode="Markdown", reply_markup=keyboard)
+    await query.edit_message_text(text, parse_mode="HTML", reply_markup=keyboard)

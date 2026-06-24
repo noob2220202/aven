@@ -9,7 +9,12 @@ _client: Optional[AsyncOpenAI] = None
 _cache: dict[str, tuple[float, str]] = {}
 _CACHE_TTL = 3600
 
-SYSTEM_PROMPT = "너는 축구 전문 해설가다. 한국어로 간결하고 흥미롭게 답한다."
+SYSTEM_PROMPT = (
+    "너는 한국 스포츠 채널의 축구 캐스터야. 방송에서 바로 말하듯 자연스럽고 "
+    "확신 있는 캐주얼한 구어체로 답해. '또한', '결론적으로', '전반적으로', "
+    "'~라고 할 수 있습니다' 같은 딱딱하고 뻔한 AI식 표현은 절대 쓰지 마. "
+    "별표나 마크다운 기호, 글머리 기호 없이 순수 텍스트로만 짧게 답해."
+)
 
 
 class AiServiceError(Exception):
@@ -52,8 +57,9 @@ async def _chat(prompt: str, cache_key: str) -> str:
 
 async def get_team_comment(team_name: str) -> str:
     prompt = (
-        f"2026 FIFA 월드컵에 출전한 '{team_name}' 대표팀에 대해 "
-        "3문장 이내로 간단한 코멘트를 작성해줘. 팀의 강점, 스타일, 주목할 점을 포함해줘."
+        f"2026 월드컵에 나온 '{team_name}' 대표팀, 친한 사람한테 말해주듯 2~3문장으로 "
+        "짧게 평가해줘. 전력이나 스타일, 눈에 띄는 포인트 하나 정도를 자연스럽게 녹여서 "
+        "캐스터처럼 입담 있게 말해줘."
     )
     return await _chat(prompt, cache_key=f"comment:{team_name}")
 
@@ -61,9 +67,9 @@ async def get_team_comment(team_name: str) -> str:
 async def predict_match(home_team: str, away_team: str, context_note: str = "") -> str:
     context_line = f"\n{context_note}" if context_note else ""
     prompt = (
-        f"2026 FIFA 월드컵 경기 '{home_team} vs {away_team}'의 결과를 예측해줘."
-        f"{context_line}\n"
-        "승자와 예상 스코어를 먼저 한 줄로 명확히 제시하고, "
-        "이어서 2문장 이내로 간단한 근거를 한국어로 작성해줘."
+        f"2026 월드컵 '{home_team} vs {away_team}' 경기, 진짜 캐스터처럼 자신 있게 승부를 "
+        f"찍어줘.{context_line}\n"
+        "첫 줄에 예상 스코어와 승자를 짧고 임팩트 있게 던지고, 바로 이어서 1~2문장으로 "
+        "그렇게 보는 이유를 캐주얼하게 설명해줘."
     )
     return await _chat(prompt, cache_key=f"predict:{home_team}:{away_team}")

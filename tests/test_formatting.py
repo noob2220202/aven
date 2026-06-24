@@ -1,4 +1,5 @@
-from bot.formatting import format_kickoff_time, format_lineups, format_odds, format_status
+from bot.flags import flag_emoji
+from bot.formatting import format_kickoff_time, format_lineups, format_match_line, format_odds, format_status
 
 
 def test_format_kickoff_time():
@@ -14,17 +15,40 @@ def test_format_status_not_started():
 def test_format_status_live_with_score():
     status = {"short": "2H", "long": "Second Half", "elapsed": 70}
     goals = {"home": 2, "away": 1}
-    assert format_status(status, goals) == "🔴 후반전 2-1"
+    assert format_status(status, goals) == "🔴 후반전 2:1"
 
 
 def test_format_status_finished():
     status = {"short": "FT", "long": "Match Finished", "elapsed": 90}
     goals = {"home": 3, "away": 0}
-    assert format_status(status, goals) == "경기 종료 3-0"
+    assert format_status(status, goals) == "경기 종료 3:0"
+
+
+def test_format_match_line_includes_flags_and_bold_names():
+    fixture = {
+        "teams": {"home": {"name": "Brazil"}, "away": {"name": "Argentina"}},
+        "fixture": {
+            "date": "2026-06-25T01:00:00+00:00",
+            "status": {"short": "NS", "long": "Not Started", "elapsed": None},
+        },
+        "goals": {"home": None, "away": None},
+    }
+    line = format_match_line(fixture)
+    assert flag_emoji("Brazil") in line
+    assert flag_emoji("Argentina") in line
+    assert "<b>Brazil</b>" in line
+    assert "<b>Argentina</b>" in line
+    assert "10:00" in line
+
+
+def test_flag_emoji_known_and_unknown():
+    assert flag_emoji("Brazil") == "🇧🇷"
+    assert flag_emoji("South Korea") == "🇰🇷"
+    assert flag_emoji("Atlantis") == "🏳️"
 
 
 def test_format_lineups_empty():
-    assert "발표되지 않았습니다" in format_lineups([])
+    assert "라인업이 안 나왔어요" in format_lineups([])
 
 
 def test_format_lineups_with_data():
@@ -42,10 +66,11 @@ def test_format_lineups_with_data():
     assert "Brazil" in text
     assert "4-3-3" in text
     assert "Alisson" in text
+    assert flag_emoji("Brazil") in text
 
 
 def test_format_odds_empty():
-    assert "배당 정보가 제공되지" in format_odds([])
+    assert "배당이 안 떴어요" in format_odds([])
 
 
 def test_format_odds_with_data():

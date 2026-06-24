@@ -1,4 +1,7 @@
+import html
+
 from .api_football import to_kst_datetime
+from .flags import flag_emoji
 
 STATUS_KO = {
     "TBD": "일정 미정",
@@ -38,13 +41,26 @@ def format_status(status: dict, goals: dict) -> str:
     home_goals = goals.get("home")
     away_goals = goals.get("away")
     if home_goals is not None and away_goals is not None:
-        return f"{label} {home_goals}-{away_goals}"
+        return f"{label} {home_goals}:{away_goals}"
     return label
+
+
+def format_match_line(fixture: dict) -> str:
+    home = fixture["teams"]["home"]["name"]
+    away = fixture["teams"]["away"]["name"]
+    kickoff = format_kickoff_time(fixture["fixture"]["date"])
+    status = format_status(fixture["fixture"]["status"], fixture["goals"])
+
+    return (
+        f"{flag_emoji(home)} <b>{html.escape(home)}</b> 🆚 "
+        f"<b>{html.escape(away)}</b> {flag_emoji(away)}\n"
+        f"┗ 🕐 {kickoff} · {html.escape(status)}"
+    )
 
 
 def format_lineups(lineups: list[dict]) -> str:
     if not lineups:
-        return "⏳ 라인업이 아직 발표되지 않았습니다. (보통 경기 시작 1시간 전 공개됩니다)"
+        return "⏳ <i>아직 라인업이 안 나왔어요. 보통 킥오프 1시간 전에 풀려요!</i>"
 
     blocks = []
     for team_lineup in lineups:
@@ -53,33 +69,36 @@ def format_lineups(lineups: list[dict]) -> str:
         coach = team_lineup.get("coach", {}).get("name") or "감독 미정"
         starters = team_lineup.get("startXI", [])
         starter_lines = [
-            f"  {p['player'].get('number', '-')}. {p['player'].get('name', '?')} "
-            f"({p['player'].get('pos', '?')})"
+            f"  {p['player'].get('number', '-')}. {html.escape(p['player'].get('name', '?'))} "
+            f"<i>({html.escape(p['player'].get('pos', '?'))})</i>"
             for p in starters
         ]
-        block = f"*{team_name}* ({formation})\n감독: {coach}\n" + "\n".join(starter_lines)
+        block = (
+            f"{flag_emoji(team_name)} <b>{html.escape(team_name)}</b> · {html.escape(formation)}\n"
+            f"👔 감독: {html.escape(coach)}\n" + "\n".join(starter_lines)
+        )
         blocks.append(block)
     return "\n\n".join(blocks)
 
 
 def format_odds(odds_response: list[dict]) -> str:
     if not odds_response:
-        return "⏳ 아직 배당 정보가 제공되지 않습니다. (보통 경기 1~14일 전 공개됩니다)"
+        return "⏳ <i>아직 배당이 안 떴어요. 보통 경기 1~14일 전부터 풀려요!</i>"
 
     bookmakers = odds_response[0].get("bookmakers", [])
-    lines = ["💰 *승무패 배당 (Match Winner)*", ""]
+    lines = ["💰 <b>승무패 배당</b>", ""]
     for bookmaker in bookmakers[:3]:
         bet = next((b for b in bookmaker.get("bets", []) if b.get("name") == "Match Winner"), None)
         if not bet:
             continue
         values = {v["value"]: v["odd"] for v in bet.get("values", [])}
         lines.append(
-            f"*{bookmaker.get('name', '북메이커')}*  "
-            f"승 {values.get('Home', '-')} / 무 {values.get('Draw', '-')} / 패 {values.get('Away', '-')}"
+            f"🏦 <b>{html.escape(bookmaker.get('name', '북메이커'))}</b>\n"
+            f"   승 {values.get('Home', '-')} · 무 {values.get('Draw', '-')} · 패 {values.get('Away', '-')}"
         )
 
     if len(lines) == 2:
-        return "⏳ 아직 배당 정보가 제공되지 않습니다. (보통 경기 1~14일 전 공개됩니다)"
+        return "⏳ <i>아직 배당이 안 떴어요. 보통 경기 1~14일 전부터 풀려요!</i>"
     return "\n".join(lines)
 
 

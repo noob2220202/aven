@@ -1,10 +1,12 @@
 import asyncio
+import html
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from .. import ai_service, api_football
 from ..api_football import to_kst_datetime
+from ..flags import flag_emoji
 from ..formatting import format_kickoff_time, format_lineups, format_odds, format_odds_summary_for_prompt, format_status
 
 
@@ -33,18 +35,19 @@ def _format_detail(fixture: dict) -> str:
     round_name = fixture.get("league", {}).get("round", "")
 
     return (
-        f"🏆 {round_name}\n"
+        f"🏆 <i>{html.escape(round_name)}</i>\n\n"
+        f"{flag_emoji(home)} <b>{html.escape(home)}</b>  🆚  "
+        f"<b>{html.escape(away)}</b>  {flag_emoji(away)}\n\n"
         f"🕐 {kickoff} (한국시간)\n"
-        f"🏟 {venue}\n\n"
-        f"*{home}* vs *{away}*\n"
-        f"상태: {status}"
+        f"🏟 {html.escape(venue)}\n"
+        f"📍 {html.escape(status)}"
     )
 
 
 async def _get_fixture_or_notify(query, fixture_id: int) -> dict | None:
     fixture = await api_football.get_fixture(fixture_id)
     if fixture is None:
-        await query.edit_message_text("경기 정보를 찾을 수 없습니다.")
+        await query.edit_message_text("🤷 경기 정보를 못 찾았어요.")
     return fixture
 
 
@@ -56,20 +59,20 @@ async def match_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     try:
         fixture = await _get_fixture_or_notify(query, fixture_id)
     except api_football.ApiFootballError as exc:
-        await query.edit_message_text(f"경기 정보를 가져오지 못했습니다: {exc}")
+        await query.edit_message_text(f"⚠️ 경기 정보를 못 가져왔어요: {html.escape(str(exc))}")
         return
     if fixture is None:
         return
 
     kst_date = to_kst_datetime(fixture["fixture"]["date"]).date().isoformat()
     await query.edit_message_text(
-        _format_detail(fixture), parse_mode="Markdown", reply_markup=_detail_keyboard(fixture_id, kst_date)
+        _format_detail(fixture), parse_mode="HTML", reply_markup=_detail_keyboard(fixture_id, kst_date)
     )
 
 
 async def lineup_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
-    await query.answer("라인업 조회 중...")
+    await query.answer("라인업 가져오는 중...")
     fixture_id = int(query.data.split(":", 1)[1])
 
     try:
@@ -78,18 +81,18 @@ async def lineup_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             return
         lineups = await api_football.get_lineups(fixture_id)
     except api_football.ApiFootballError as exc:
-        await query.edit_message_text(f"라인업을 가져오지 못했습니다: {exc}")
+        await query.edit_message_text(f"⚠️ 라인업을 못 가져왔어요: {html.escape(str(exc))}")
         return
 
     kst_date = to_kst_datetime(fixture["fixture"]["date"]).date().isoformat()
     await query.edit_message_text(
-        format_lineups(lineups), parse_mode="Markdown", reply_markup=_detail_keyboard(fixture_id, kst_date)
+        format_lineups(lineups), parse_mode="HTML", reply_markup=_detail_keyboard(fixture_id, kst_date)
     )
 
 
 async def odds_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
-    await query.answer("배당 조회 중...")
+    await query.answer("배당 가져오는 중...")
     fixture_id = int(query.data.split(":", 1)[1])
 
     try:
@@ -98,12 +101,12 @@ async def odds_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             return
         odds = await api_football.get_odds(fixture_id)
     except api_football.ApiFootballError as exc:
-        await query.edit_message_text(f"배당 정보를 가져오지 못했습니다: {exc}")
+        await query.edit_message_text(f"⚠️ 배당 정보를 못 가져왔어요: {html.escape(str(exc))}")
         return
 
     kst_date = to_kst_datetime(fixture["fixture"]["date"]).date().isoformat()
     await query.edit_message_text(
-        format_odds(odds), parse_mode="Markdown", reply_markup=_detail_keyboard(fixture_id, kst_date)
+        format_odds(odds), parse_mode="HTML", reply_markup=_detail_keyboard(fixture_id, kst_date)
     )
 
 
@@ -115,7 +118,7 @@ async def comment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     try:
         fixture = await _get_fixture_or_notify(query, fixture_id)
     except api_football.ApiFootballError as exc:
-        await query.edit_message_text(f"경기 정보를 가져오지 못했습니다: {exc}")
+        await query.edit_message_text(f"⚠️ 경기 정보를 못 가져왔어요: {html.escape(str(exc))}")
         return
     if fixture is None:
         return
@@ -130,11 +133,18 @@ async def comment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             ai_service.get_team_comment(away),
         )
     except ai_service.AiServiceError as exc:
-        await query.edit_message_text(str(exc), reply_markup=_detail_keyboard(fixture_id, kst_date))
+        await query.edit_message_text(
+            f"⚠️ {html.escape(str(exc))}", reply_markup=_detail_keyboard(fixture_id, kst_date)
+        )
         return
 
-    text = f"🗣 *{home}*\n{home_comment}\n\n🗣 *{away}*\n{away_comment}"
-    await query.edit_message_text(text, parse_mode="Markdown", reply_markup=_detail_keyboard(fixture_id, kst_date))
+    text = (
+        f"{flag_emoji(home)} <b>{html.escape(home)}</b>\n"
+        f"<blockquote>{html.escape(home_comment)}</blockquote>\n\n"
+        f"{flag_emoji(away)} <b>{html.escape(away)}</b>\n"
+        f"<blockquote>{html.escape(away_comment)}</blockquote>"
+    )
+    await query.edit_message_text(text, parse_mode="HTML", reply_markup=_detail_keyboard(fixture_id, kst_date))
 
 
 async def predict_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -145,7 +155,7 @@ async def predict_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     try:
         fixture = await _get_fixture_or_notify(query, fixture_id)
     except api_football.ApiFootballError as exc:
-        await query.edit_message_text(f"경기 정보를 가져오지 못했습니다: {exc}")
+        await query.edit_message_text(f"⚠️ 경기 정보를 못 가져왔어요: {html.escape(str(exc))}")
         return
     if fixture is None:
         return
@@ -164,8 +174,10 @@ async def predict_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     try:
         prediction = await ai_service.predict_match(home, away, context_note)
     except ai_service.AiServiceError as exc:
-        await query.edit_message_text(str(exc), reply_markup=_detail_keyboard(fixture_id, kst_date))
+        await query.edit_message_text(
+            f"⚠️ {html.escape(str(exc))}", reply_markup=_detail_keyboard(fixture_id, kst_date)
+        )
         return
 
-    text = f"🔮 *예측 결과*\n\n{prediction}"
-    await query.edit_message_text(text, parse_mode="Markdown", reply_markup=_detail_keyboard(fixture_id, kst_date))
+    text = f"🔮 <b>승부 예측</b>\n<blockquote>{html.escape(prediction)}</blockquote>"
+    await query.edit_message_text(text, parse_mode="HTML", reply_markup=_detail_keyboard(fixture_id, kst_date))
